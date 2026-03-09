@@ -47,6 +47,10 @@ import {
   Highlight,
   Input,
   Tooltip,
+  Switch,
+  Divider,
+  InputNumber,
+  Select,
 } from '@douyinfe/semi-ui';
 import {
   getChannelModels,
@@ -209,7 +213,15 @@ const EditChannelModal = (props) => {
     upstream_model_update_last_check_time: 0,
     upstream_model_update_last_detected_models: [],
     upstream_model_update_ignored_models: '',
+    // 渠道速率限制
+    channel_rate_limit_enabled: false,
+    channel_rate_limit_duration: 1,
+    channel_rate_limit_count: 100,
+    channel_rate_limit_limit_admins: false,
   };
+  // 模型级别速率限制状态，key=模型名称, value={count, duration_minutes, limit_admins}
+  const [modelRateLimits, setModelRateLimits] = useState({});
+  const [newModelRateLimit, setNewModelRateLimit] = useState({ model: '', count: 10, duration_minutes: 1, limit_admins: false });
   const [batch, setBatch] = useState(false);
   const [multiToSingle, setMultiToSingle] = useState(false);
   const [multiKeyMode, setMultiKeyMode] = useState('random');
@@ -901,6 +913,19 @@ const EditChannelModal = (props) => {
           )
             ? parsedSettings.upstream_model_update_ignored_models.join(',')
             : '';
+          // 读取渠道速率限制设置
+          const rateLimit = parsedSettings.rate_limit || {};
+          data.channel_rate_limit_enabled = rateLimit.enabled === true;
+          data.channel_rate_limit_duration = Number(rateLimit.duration_minutes) || 1;
+          data.channel_rate_limit_count = Number(rateLimit.count) || 100;
+          data.channel_rate_limit_limit_admins = rateLimit.limit_admins === true;
+          // 读取模型级别速率限制
+          const modelRateLimitsData = parsedSettings.model_rate_limits;
+          setModelRateLimits(
+            modelRateLimitsData && typeof modelRateLimitsData === 'object'
+              ? modelRateLimitsData
+              : {},
+          );
         } catch (error) {
           console.error('解析其他设置失败:', error);
           data.azure_responses_version = '';
@@ -919,6 +944,11 @@ const EditChannelModal = (props) => {
           data.upstream_model_update_last_check_time = 0;
           data.upstream_model_update_last_detected_models = [];
           data.upstream_model_update_ignored_models = '';
+          data.channel_rate_limit_enabled = false;
+          data.channel_rate_limit_duration = 1;
+          data.channel_rate_limit_count = 100;
+          data.channel_rate_limit_limit_admins = false;
+          setModelRateLimits({});
         }
       } else {
         // 兼容历史数据：老渠道没有 settings 时，默认按 json 展示
@@ -936,6 +966,11 @@ const EditChannelModal = (props) => {
         data.upstream_model_update_last_check_time = 0;
         data.upstream_model_update_last_detected_models = [];
         data.upstream_model_update_ignored_models = '';
+        data.channel_rate_limit_enabled = false;
+        data.channel_rate_limit_duration = 1;
+        data.channel_rate_limit_count = 100;
+        data.channel_rate_limit_limit_admins = false;
+        setModelRateLimits({});
       }
 
       if (
@@ -1339,6 +1374,9 @@ const EditChannelModal = (props) => {
     }
     // 重置本地输入，避免下次打开残留上一次的 JSON 字段值
     setInputs(getInitValues());
+    // 重置模型速率限制
+    setModelRateLimits({});
+    setNewModelRateLimit({ model: '', count: 10, duration_minutes: 1, limit_admins: false });
     // 重置密钥显示状态
     resetKeyDisplayState();
   };
@@ -1761,6 +1799,21 @@ const EditChannelModal = (props) => {
       settings.upstream_model_update_last_check_time = 0;
     }
 
+    // 保存渠道速率限制配置
+    settings.channel_rate_limit_enabled =
+      localInputs.channel_rate_limit_enabled === true;
+    settings.channel_rate_limit_duration =
+      Number(localInputs.channel_rate_limit_duration) || 1;
+    settings.channel_rate_limit_count =
+      Number(localInputs.channel_rate_limit_count) || 100;
+    settings.channel_rate_limit_limit_admins =
+      localInputs.channel_rate_limit_limit_admins === true;
+    if (Object.keys(modelRateLimits).length > 0) {
+      settings.model_rate_limits = modelRateLimits;
+    } else {
+      delete settings.model_rate_limits;
+    }
+
     localInputs.settings = JSON.stringify(settings);
 
     // 清理不需要发送到后端的字段
@@ -1787,6 +1840,11 @@ const EditChannelModal = (props) => {
     delete localInputs.upstream_model_update_last_check_time;
     delete localInputs.upstream_model_update_last_detected_models;
     delete localInputs.upstream_model_update_ignored_models;
+    // 清理渠道速率限制临时字段
+    delete localInputs.channel_rate_limit_enabled;
+    delete localInputs.channel_rate_limit_duration;
+    delete localInputs.channel_rate_limit_count;
+    delete localInputs.channel_rate_limit_limit_admins;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -3924,6 +3982,203 @@ const EditChannelModal = (props) => {
                         '如果用户请求中包含系统提示词，则使用此设置拼接到用户的系统提示词前面',
                       )}
                     />
+
+                    {/* 渠道速率限制 */}
+                    <div className='mt-4 mb-2 text-sm font-medium text-gray-700'>
+                      {t('渠道速率限制')}
+                    </div>
+                    <Form.Switch
+                      field='channel_rate_limit_enabled'
+                      label={t('启用渠道速率限制')}
+                      checkedText={t('开')}
+                      uncheckedText={t('关')}
+                      onChange={(value) =>
+                        handleChannelOtherSettingsChange(
+                          'channel_rate_limit_enabled',
+                          value,
+                        )
+                      }
+                      extraText={t(
+                        '对每个用户限制访问该渠道的请求速率',
+                      )}
+                    />
+                    {inputs.channel_rate_limit_enabled && (
+                      <>
+                        <Form.InputNumber
+                          field='channel_rate_limit_duration'
+                          label={t('时间窗口（分钟）')}
+                          min={1}
+                          max={1440}
+                          precision={0}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange(
+                              'channel_rate_limit_duration',
+                              value,
+                            )
+                          }
+                          extraText={t('速率限制的时间窗口，单位为分钟')}
+                        />
+                        <Form.InputNumber
+                          field='channel_rate_limit_count'
+                          label={t('最大请求次数')}
+                          min={1}
+                          precision={0}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange(
+                              'channel_rate_limit_count',
+                              value,
+                            )
+                          }
+                          extraText={t('每个用户在时间窗口内最多可请求的次数')}
+                        />
+                        <Form.Switch
+                          field='channel_rate_limit_limit_admins'
+                          label={t('对管理员也启用限速')}
+                          checkedText={t('开')}
+                          uncheckedText={t('关')}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange(
+                              'channel_rate_limit_limit_admins',
+                              value,
+                            )
+                          }
+                          extraText={t(
+                            '关闭时超级管理员和普通管理员不受此渠道速率限制约束，开启后所有用户均受限制',
+                          )}
+                        />
+                      </>
+                    )}
+                    {/* ===== 模型速率限制 ===== */}
+                    <Divider style={{ margin: '16px 0 8px' }}>
+                      {t('模型速率限制')}
+                    </Divider>
+                    <Typography.Text type='secondary' size='small' style={{ display: 'block', marginBottom: 8 }}>
+                      {t('为该渠道内的特定模型单独配置速率限制，会覆盖渠道级别的速率限制')}
+                    </Typography.Text>
+                    {Object.entries(modelRateLimits).map(([modelName, cfg]) => (
+                      <div key={modelName} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                        <Tag size='large' style={{ minWidth: 120, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {modelName}
+                        </Tag>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Typography.Text size='small' type='tertiary'>{t('次数')}</Typography.Text>
+                          <InputNumber
+                            size='small'
+                            min={1}
+                            precision={0}
+                            value={cfg.count}
+                            onChange={(val) => {
+                              if (val > 0) {
+                                setModelRateLimits(prev => ({ ...prev, [modelName]: { ...prev[modelName], count: val } }));
+                              }
+                            }}
+                            style={{ width: 80 }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Typography.Text size='small' type='tertiary'>{t('分钟')}</Typography.Text>
+                          <InputNumber
+                            size='small'
+                            min={1}
+                            precision={0}
+                            value={cfg.duration_minutes || 1}
+                            onChange={(val) => {
+                              if (val > 0) {
+                                setModelRateLimits(prev => ({ ...prev, [modelName]: { ...prev[modelName], duration_minutes: val } }));
+                              }
+                            }}
+                            style={{ width: 80 }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Typography.Text size='small' type='tertiary'>{t('限管理员')}</Typography.Text>
+                          <Switch
+                            size='small'
+                            checked={!!cfg.limit_admins}
+                            onChange={(v) => setModelRateLimits(prev => ({ ...prev, [modelName]: { ...prev[modelName], limit_admins: v } }))}
+                          />
+                        </div>
+                        <Button
+                          size='small'
+                          type='danger'
+                          style={{ flexShrink: 0 }}
+                          onClick={() => setModelRateLimits(prev => {
+                            const next = { ...prev };
+                            delete next[modelName];
+                            return next;
+                          })}
+                        >{t('删除')}</Button>
+                      </div>
+                    ))}
+                    {/* 新增模型速率限制行 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                      <Select
+                        size='small'
+                        allowCreate
+                        filter
+                        placeholder={t('选择或输入模型名称')}
+                        value={newModelRateLimit.model || undefined}
+                        onChange={(v) => setNewModelRateLimit(prev => ({ ...prev, model: v || '' }))}
+                        style={{ minWidth: 140, maxWidth: 220 }}
+                        optionList={(() => {
+                          // 仅使用当前渠道已配置的模型
+                          const raw = Array.isArray(inputs.models) && inputs.models.length > 0
+                            ? inputs.models
+                            : typeof inputs.models === 'string' && inputs.models.trim()
+                              ? inputs.models.split(',').map(s => s.trim()).filter(Boolean)
+                              : [];
+                          return raw.filter(m => m && !modelRateLimits[m]).map(m => ({ label: m, value: m }));
+                        })()}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Typography.Text size='small' type='tertiary'>{t('次数')}</Typography.Text>
+                        <InputNumber
+                          size='small'
+                          min={1}
+                          precision={0}
+                          value={newModelRateLimit.count}
+                          onChange={(val) => { if (val > 0) setNewModelRateLimit(prev => ({ ...prev, count: val })); }}
+                          style={{ width: 80 }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Typography.Text size='small' type='tertiary'>{t('分钟')}</Typography.Text>
+                        <InputNumber
+                          size='small'
+                          min={1}
+                          precision={0}
+                          value={newModelRateLimit.duration_minutes}
+                          onChange={(val) => { if (val > 0) setNewModelRateLimit(prev => ({ ...prev, duration_minutes: val })); }}
+                          style={{ width: 80 }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Typography.Text size='small' type='tertiary'>{t('限管理员')}</Typography.Text>
+                        <Switch
+                          size='small'
+                          checked={newModelRateLimit.limit_admins}
+                          onChange={(v) => setNewModelRateLimit(prev => ({ ...prev, limit_admins: v }))}
+                        />
+                      </div>
+                      <Button
+                        size='small'
+                        theme='solid'
+                        style={{ flexShrink: 0 }}
+                        onClick={() => {
+                          const model = (newModelRateLimit.model || '').trim();
+                          if (!model) return;
+                          setModelRateLimits(prev => ({
+                            ...prev,
+                            [model]: {
+                              count: newModelRateLimit.count || 10,
+                              duration_minutes: newModelRateLimit.duration_minutes || 1,
+                              limit_admins: newModelRateLimit.limit_admins,
+                            }
+                          }));
+                          setNewModelRateLimit({ model: '', count: 10, duration_minutes: 1, limit_admins: false });
+                        }}
+                      >{t('添加')}</Button>
+                    </div>
                   </Card>
                 </div>
               </div>

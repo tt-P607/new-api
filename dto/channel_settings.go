@@ -23,8 +23,22 @@ const (
 	AwsKeyTypeApiKey AwsKeyType = "api_key"
 )
 
+// ModelRateLimitConfig 针对单个模型的速率限制配置
+type ModelRateLimitConfig struct {
+	Count           int  `json:"count"`                      // 每用户每窗口最大请求数（>0 启用）
+	DurationMinutes int  `json:"duration_minutes,omitempty"` // 时间窗口（分钟），0 时继承渠道配置
+	LimitAdmins     bool `json:"limit_admins,omitempty"`     // 是否对管理员也启用限速
+}
+
 type ChannelOtherSettings struct {
-	AzureResponsesVersion                 string        `json:"azure_responses_version,omitempty"`
+	AzureResponsesVersion string `json:"azure_responses_version,omitempty"`
+	// 渠道速率限制配置（扁平字段，与前端直接对应）
+	ChannelRateLimitEnabled     bool `json:"channel_rate_limit_enabled,omitempty"`
+	ChannelRateLimitDuration    int  `json:"channel_rate_limit_duration,omitempty"` // 时间窗口（分钟）
+	ChannelRateLimitCount       int  `json:"channel_rate_limit_count,omitempty"`    // 每用户每窗口最大请求数
+	ChannelRateLimitLimitAdmins bool `json:"channel_rate_limit_limit_admins,omitempty"` // 管理员是否也受限（默认false=豁免）
+	// 渠道模型级别速率限制，key=模型名称
+	ModelRateLimits map[string]ModelRateLimitConfig `json:"model_rate_limits,omitempty"`
 	VertexKeyType                         VertexKeyType `json:"vertex_key_type,omitempty"` // "json" or "api_key"
 	OpenRouterEnterprise                  *bool         `json:"openrouter_enterprise,omitempty"`
 	ClaudeBetaQuery                       bool          `json:"claude_beta_query,omitempty"`         // Claude 渠道是否强制追加 ?beta=true

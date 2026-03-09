@@ -83,6 +83,8 @@ const Dashboard = () => {
     dashboardData.performanceMetrics,
     dashboardData.navigate,
     dashboardData.t,
+    dashboardData.selectedModel,
+    dashboardData.filteredStats,
   );
 
   // ========== 数据处理 ==========
@@ -187,6 +189,9 @@ const Dashboard = () => {
             FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
             hasApiInfoPanel={dashboardData.hasApiInfoPanel}
             t={dashboardData.t}
+            onModelSelect={dashboardData.setSelectedModel}
+            selectedModel={dashboardData.selectedModel}
+            modelColors={dashboardData.modelColors}
           />
 
           {dashboardData.hasApiInfoPanel && (
