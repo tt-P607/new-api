@@ -52,8 +52,14 @@ func (mi *Model) Insert() error {
 	originalStatus := mi.Status
 	originalSyncOfficial := mi.SyncOfficial
 
-	// 先创建记录（GORM 会对零值字段应用默认值）
-	if err := DB.Create(mi).Error; err != nil {
+	// 如果 Id 为 0，让数据库自动生成，避免主键冲突
+	var err error
+	if mi.Id == 0 {
+		err = DB.Omit("id").Create(mi).Error
+	} else {
+		err = DB.Create(mi).Error
+	}
+	if err != nil {
 		return err
 	}
 
