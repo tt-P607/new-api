@@ -29,12 +29,7 @@ import {
 } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
-import {
-  fetchTokenKey as fetchTokenKeyById,
-  fetchTokenKeysBatch,
-  getServerAddress,
-  encodeChannelConnectionString,
-} from '../../helpers/token';
+import { fetchTokenKey as fetchTokenKeyById } from '../../helpers/token';
 
 export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const { t } = useTranslation();
@@ -42,7 +37,6 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   // Basic state
   const [tokens, setTokens] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [groupRatios, setGroupRatios] = useState({});
   const [activePage, setActivePage] = useState(1);
   const [tokenCount, setTokenCount] = useState(0);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
@@ -202,13 +196,6 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const copyTokenKey = async (record) => {
     const fullKey = await fetchTokenKey(record);
     await copyText(`sk-${fullKey}`);
-  };
-
-  const copyTokenConnectionString = async (record) => {
-    const fullKey = await fetchTokenKey(record);
-    const serverUrl = getServerAddress();
-    const connStr = encodeChannelConnectionString(`sk-${fullKey}`, serverUrl);
-    await copyText(connStr);
   };
 
   // Open link function for chat integrations
@@ -410,17 +397,14 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
       return;
     }
     try {
-      const ids = selectedKeys.map((token) => token.id);
-      const keysMap = await fetchTokenKeysBatch(ids);
-
-      setResolvedTokenKeys((prev) => ({ ...prev, ...keysMap }));
-
+      const keys = await Promise.all(
+        selectedKeys.map((token) => fetchTokenKey(token, { suppressError: true })),
+      );
       let content = '';
-      for (const token of selectedKeys) {
-        const fullKey = keysMap[token.id];
-        if (!fullKey) continue;
+      for (let i = 0; i < selectedKeys.length; i++) {
+        const fullKey = keys[i];
         if (copyType === 'name+key') {
-          content += `${token.name}    sk-${fullKey}\n`;
+          content += `${selectedKeys[i].name}    sk-${fullKey}\n`;
         } else {
           content += `sk-${fullKey}\n`;
         }
@@ -438,17 +422,6 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
       .catch((reason) => {
         showError(reason);
       });
-    API.get('/api/user/self/groups')
-      .then((res) => {
-        if (res.data.success && res.data.data) {
-          const ratios = {};
-          for (const [name, info] of Object.entries(res.data.data)) {
-            ratios[name] = info.ratio;
-          }
-          setGroupRatios(ratios);
-        }
-      })
-      .catch(() => {});
   }, [pageSize]);
 
   return {
@@ -459,7 +432,6 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     tokenCount,
     pageSize,
     searching,
-    groupRatios,
 
     // Selection state
     selectedKeys,
@@ -493,7 +465,6 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     fetchTokenKey,
     toggleTokenVisibility,
     copyTokenKey,
-    copyTokenConnectionString,
     onOpenLink,
     manageToken,
     searchTokens,
