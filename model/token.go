@@ -278,7 +278,11 @@ func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 
 func (token *Token) Insert() error {
 	var err error
-	err = DB.Create(token).Error
+	if token.Id == 0 {
+		err = DB.Omit("id").Create(token).Error
+	} else {
+		err = DB.Create(token).Error
+	}
 	return err
 }
 

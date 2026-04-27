@@ -397,7 +397,12 @@ func (user *User) Insert(inviterId int) error {
 		user.SetSetting(defaultSetting)
 	}
 
-	result := DB.Create(user)
+	var result *gorm.DB
+	if user.Id == 0 {
+		result = DB.Omit("id").Create(user)
+	} else {
+		result = DB.Create(user)
+	}
 	if result.Error != nil {
 		return result.Error
 	}
@@ -454,7 +459,12 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 		user.SetSetting(defaultSetting)
 	}
 
-	result := tx.Create(user)
+	var result *gorm.DB
+	if user.Id == 0 {
+		result = tx.Omit("id").Create(user)
+	} else {
+		result = tx.Create(user)
+	}
 	if result.Error != nil {
 		return result.Error
 	}

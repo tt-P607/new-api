@@ -447,7 +447,11 @@ func (channel *Channel) GetStatusCodeMapping() string {
 
 func (channel *Channel) Insert() error {
 	var err error
-	err = DB.Create(channel).Error
+	if channel.Id == 0 {
+		err = DB.Omit("id").Create(channel).Error
+	} else {
+		err = DB.Create(channel).Error
+	}
 	if err != nil {
 		return err
 	}
