@@ -49,6 +49,10 @@ import {
   Tooltip,
   Collapse,
   Dropdown,
+  Switch,
+  Divider,
+  InputNumber,
+  Select,
 } from '@douyinfe/semi-ui';
 import {
   getChannelModels,
@@ -215,7 +219,15 @@ const EditChannelModal = (props) => {
     upstream_model_update_last_check_time: 0,
     upstream_model_update_last_detected_models: [],
     upstream_model_update_ignored_models: '',
+    // 渠道速率限制
+    channel_rate_limit_enabled: false,
+    channel_rate_limit_duration: 1,
+    channel_rate_limit_count: 100,
+    channel_rate_limit_limit_admins: false,
   };
+  // 模型级别速率限制状态，key=模型名称, value={count, duration_minutes, limit_admins}
+  const [modelRateLimits, setModelRateLimits] = useState({});
+  const [newModelRateLimit, setNewModelRateLimit] = useState({ model: '', count: 10, duration_minutes: 1, limit_admins: false });
   const [batch, setBatch] = useState(false);
   const [multiToSingle, setMultiToSingle] = useState(false);
   const [multiKeyMode, setMultiKeyMode] = useState('random');
@@ -927,6 +939,19 @@ const EditChannelModal = (props) => {
           )
             ? parsedSettings.upstream_model_update_ignored_models.join(',')
             : '';
+          // 读取渠道速率限制设置
+          const rateLimit = parsedSettings.rate_limit || {};
+          data.channel_rate_limit_enabled = rateLimit.enabled === true;
+          data.channel_rate_limit_duration = Number(rateLimit.duration_minutes) || 1;
+          data.channel_rate_limit_count = Number(rateLimit.count) || 100;
+          data.channel_rate_limit_limit_admins = rateLimit.limit_admins === true;
+          // 读取模型级别速率限制
+          const modelRateLimitsData = parsedSettings.model_rate_limits;
+          setModelRateLimits(
+            modelRateLimitsData && typeof modelRateLimitsData === 'object'
+              ? modelRateLimitsData
+              : {},
+          );
         } catch (error) {
           console.error('解析其他设置失败:', error);
           data.azure_responses_version = '';
@@ -946,6 +971,11 @@ const EditChannelModal = (props) => {
           data.upstream_model_update_last_check_time = 0;
           data.upstream_model_update_last_detected_models = [];
           data.upstream_model_update_ignored_models = '';
+          data.channel_rate_limit_enabled = false;
+          data.channel_rate_limit_duration = 1;
+          data.channel_rate_limit_count = 100;
+          data.channel_rate_limit_limit_admins = false;
+          setModelRateLimits({});
         }
       } else {
         // 兼容历史数据：老渠道没有 settings 时，默认按 json 展示
@@ -964,6 +994,11 @@ const EditChannelModal = (props) => {
         data.upstream_model_update_last_check_time = 0;
         data.upstream_model_update_last_detected_models = [];
         data.upstream_model_update_ignored_models = '';
+        data.channel_rate_limit_enabled = false;
+        data.channel_rate_limit_duration = 1;
+        data.channel_rate_limit_count = 100;
+        data.channel_rate_limit_limit_admins = false;
+        setModelRateLimits({});
       }
 
       if (
@@ -1401,6 +1436,9 @@ const EditChannelModal = (props) => {
     }
     // 重置本地输入，避免下次打开残留上一次的 JSON 字段值
     setInputs(getInitValues());
+    // 重置模型速率限制
+    setModelRateLimits({});
+    setNewModelRateLimit({ model: '', count: 10, duration_minutes: 1, limit_admins: false });
     // 重置密钥显示状态
     resetKeyDisplayState();
     // 重置剪贴板检测状态
@@ -1826,6 +1864,21 @@ const EditChannelModal = (props) => {
       settings.upstream_model_update_last_check_time = 0;
     }
 
+    // 保存渠道速率限制配置
+    settings.channel_rate_limit_enabled =
+      localInputs.channel_rate_limit_enabled === true;
+    settings.channel_rate_limit_duration =
+      Number(localInputs.channel_rate_limit_duration) || 1;
+    settings.channel_rate_limit_count =
+      Number(localInputs.channel_rate_limit_count) || 100;
+    settings.channel_rate_limit_limit_admins =
+      localInputs.channel_rate_limit_limit_admins === true;
+    if (Object.keys(modelRateLimits).length > 0) {
+      settings.model_rate_limits = modelRateLimits;
+    } else {
+      delete settings.model_rate_limits;
+    }
+
     localInputs.settings = JSON.stringify(settings);
 
     // 清理不需要发送到后端的字段
@@ -1853,6 +1906,11 @@ const EditChannelModal = (props) => {
     delete localInputs.upstream_model_update_last_check_time;
     delete localInputs.upstream_model_update_last_detected_models;
     delete localInputs.upstream_model_update_ignored_models;
+    // 清理渠道速率限制临时字段
+    delete localInputs.channel_rate_limit_enabled;
+    delete localInputs.channel_rate_limit_duration;
+    delete localInputs.channel_rate_limit_count;
+    delete localInputs.channel_rate_limit_limit_admins;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -3709,9 +3767,9 @@ const EditChannelModal = (props) => {
                           transition: 'transform 0.2s',
                         }}
                       />
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             </Spin>
 

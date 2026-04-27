@@ -64,6 +64,21 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   // ========== 图表状态 ==========
   const [activeChartTab, setActiveChartTab] = useState('1');
 
+  // ========== 模型选择状态（用于仪表盘图表联动） ==========
+  const [selectedModel, setSelectedModel] = useState(null);
+
+  const filteredStats = useMemo(() => {
+    if (!selectedModel || !quotaData.length) return null;
+    const filtered = quotaData.filter(
+      (item) => item.model_name === selectedModel,
+    );
+    return {
+      quota: filtered.reduce((s, i) => s + (i.quota || 0), 0),
+      tokens: filtered.reduce((s, i) => s + (i.token_used || 0), 0),
+      times: filtered.reduce((s, i) => s + (i.count || 0), 0),
+    };
+  }, [selectedModel, quotaData]);
+
   // ========== 趋势数据 ==========
   const [trendData, setTrendData] = useState({
     balance: [],
@@ -304,6 +319,11 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     // 图表状态
     activeChartTab,
     setActiveChartTab,
+
+    // 模型选择状态
+    selectedModel,
+    setSelectedModel,
+    filteredStats,
 
     // 趋势数据
     trendData,

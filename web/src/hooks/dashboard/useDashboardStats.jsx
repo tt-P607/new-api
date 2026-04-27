@@ -29,6 +29,7 @@ import {
   IconTypograph,
   IconSend,
 } from '@douyinfe/semi-icons';
+import { Tag } from '@douyinfe/semi-ui';
 import { renderQuota } from '../../helpers';
 import { createSectionTitle } from '../../helpers/dashboard';
 
@@ -41,9 +42,28 @@ export const useDashboardStats = (
   performanceMetrics,
   navigate,
   t,
+  selectedModel,
+  filteredStats,
 ) => {
   const groupedStatsData = useMemo(
-    () => [
+    () => {
+      // 当选中模型时，使用过滤后的统计数据
+      const effectiveTimes = filteredStats ? filteredStats.times : times;
+      const effectiveConsumeQuota = filteredStats
+        ? filteredStats.quota
+        : consumeQuota;
+      const effectiveConsumeTokens = filteredStats
+        ? filteredStats.tokens
+        : consumeTokens;
+
+      // 选中模型时在标题后面加一个标签
+      const modelTag = selectedModel ? (
+        <Tag size='small' color='cyan' style={{ marginLeft: 4 }}>
+          {selectedModel}
+        </Tag>
+      ) : null;
+
+      return [
       {
         title: createSectionTitle(Wallet, t('账户数据')),
         color: 'bg-blue-50',
@@ -79,11 +99,16 @@ export const useDashboardStats = (
             trendColor: '#10b981',
           },
           {
-            title: t('统计次数'),
-            value: times,
+            title: (
+              <span>
+                {t('统计次数')}
+                {modelTag}
+              </span>
+            ),
+            value: effectiveTimes,
             icon: <IconPulse />,
             avatarColor: 'cyan',
-            trendData: trendData.times,
+            trendData: filteredStats ? [] : trendData.times,
             trendColor: '#06b6d4',
           },
         ],
@@ -93,19 +118,31 @@ export const useDashboardStats = (
         color: 'bg-yellow-50',
         items: [
           {
-            title: t('统计额度'),
-            value: renderQuota(consumeQuota),
+            title: (
+              <span>
+                {t('统计额度')}
+                {modelTag}
+              </span>
+            ),
+            value: renderQuota(effectiveConsumeQuota),
             icon: <IconCoinMoneyStroked />,
             avatarColor: 'yellow',
-            trendData: trendData.consumeQuota,
+            trendData: filteredStats ? [] : trendData.consumeQuota,
             trendColor: '#f59e0b',
           },
           {
-            title: t('统计Tokens'),
-            value: isNaN(consumeTokens) ? 0 : consumeTokens.toLocaleString(),
+            title: (
+              <span>
+                {t('统计Tokens')}
+                {modelTag}
+              </span>
+            ),
+            value: isNaN(effectiveConsumeTokens)
+              ? 0
+              : effectiveConsumeTokens.toLocaleString(),
             icon: <IconTextStroked />,
             avatarColor: 'pink',
-            trendData: trendData.tokens,
+            trendData: filteredStats ? [] : trendData.tokens,
             trendColor: '#ec4899',
           },
         ],
@@ -132,7 +169,8 @@ export const useDashboardStats = (
           },
         ],
       },
-    ],
+    ];
+    },
     [
       userState?.user?.quota,
       userState?.user?.used_quota,
@@ -144,6 +182,8 @@ export const useDashboardStats = (
       performanceMetrics,
       navigate,
       t,
+      selectedModel,
+      filteredStats,
     ],
   );
 

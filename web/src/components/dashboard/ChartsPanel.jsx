@@ -17,8 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React from 'react';
-import { Card, Tabs, TabPane } from '@douyinfe/semi-ui';
+import React, { useRef, useCallback, useEffect, useMemo } from 'react';
+import { Card, Tabs, TabPane, Tag, Tooltip } from '@douyinfe/semi-ui';
 import { PieChart } from 'lucide-react';
 import { VChart } from '@visactor/react-vchart';
 
@@ -37,7 +37,51 @@ const ChartsPanel = ({
   FLEX_CENTER_GAP2,
   hasApiInfoPanel,
   t,
+  onModelSelect,
+  selectedModel,
+  modelColors,
 }) => {
+  // 保存最新的 onModelSelect 引用，避免闭包捕获旧值
+  const onModelSelectRef = useRef(onModelSelect);
+  useEffect(() => {
+    onModelSelectRef.current = onModelSelect;
+  }, [onModelSelect]);
+
+  // 保存 handler 引用用于精确移除，避免影响 VChart 内部
+  const legendHandlerRef = useRef(null);
+
+  const handleLineChartReady = useCallback(
+    (vchart) => {
+      // 精确移除上一次注册的 handler（不影响 VChart 内部的 selectMode 机制）
+      if (legendHandlerRef.current) {
+        vchart.off('legendItemClick', legendHandlerRef.current);
+      }
+      const handler = (e) => {
+        let label = null;
+        const raw = e?.value;
+        if (Array.isArray(raw)) {
+          label = raw.length > 0 ? String(raw[0]) : null;
+        } else if (typeof raw === 'string' || typeof raw === 'number') {
+          label = raw ? String(raw) : null;
+        } else if (e?.datum?.label != null) {
+          label = String(e.datum.label);
+        }
+        if (onModelSelectRef.current) {
+          onModelSelectRef.current(label);
+        }
+      };
+      legendHandlerRef.current = handler;
+      vchart.on('legendItemClick', handler);
+    },
+    [],
+  );
+
+  // 从 modelColors 提取有序模型列表（用于自定义可点击色块）
+  const modelList = useMemo(
+    () => Object.keys(modelColors || {}),
+    [modelColors],
+  );
+
   return (
     <Card
       {...CARD_PROPS}
@@ -47,6 +91,17 @@ const ChartsPanel = ({
           <div className={FLEX_CENTER_GAP2}>
             <PieChart size={16} />
             {t('模型数据分析')}
+            {selectedModel && (
+              <Tag
+                size='small'
+                color='cyan'
+                closable
+                onClose={() => onModelSelect && onModelSelect(null)}
+                style={{ marginLeft: 6 }}
+              >
+                {selectedModel}
+              </Tag>
+            )}
           </div>
           <Tabs
             type='slash'
@@ -70,7 +125,11 @@ const ChartsPanel = ({
     >
       <div className='h-96 p-2'>
         {activeChartTab === '1' && (
-          <VChart spec={spec_line} option={CHART_CONFIG} />
+          <VChart
+            spec={spec_line}
+            option={CHART_CONFIG}
+            onReady={handleLineChartReady}
+          />
         )}
         {activeChartTab === '2' && (
           <VChart spec={spec_model_line} option={CHART_CONFIG} />
@@ -88,6 +147,96 @@ const ChartsPanel = ({
           <VChart spec={spec_user_trend} option={CHART_CONFIG} />
         )}
       </div>
+
+      {/* 自定义可点击模型选择条 —— 点击任意模型即可让统计卡片只展示该模型数据 */}
+      {modelList.length > 0 && (
+        <div
+          style={{
+            padding: '6px 12px 8px',
+            borderTop: '1px solid var(--semi-color-border)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 6,
+            alignItems: 'center',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              color: 'var(--semi-color-text-2)',
+              marginRight: 4,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {t('点击筛选统计')}
+          </span>
+          {modelList.map((model) => {
+            const color = modelColors[model] || '#888';
+            const isSelected = selectedModel === model;
+            return (
+              <Tooltip key={model} content={model} position='top'>
+                <span
+                  onClick={() =>
+                    onModelSelect && onModelSelect(isSelected ? null : model)
+                  }
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    border: isSelected
+                      ? `2px solid ${color}`
+                      : '1px solid transparent',
+                    backgroundColor: isSelected
+                      ? `${color}22`
+                      : 'var(--semi-color-fill-0)',
+                    transition: 'all 0.15s',
+                    maxWidth: 160,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: color,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 11,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {model}
+                  </span>
+                </span>
+              </Tooltip>
+            );
+          })}
+          {selectedModel && (
+            <span
+              onClick={() => onModelSelect && onModelSelect(null)}
+              style={{
+                fontSize: 11,
+                color: 'var(--semi-color-primary)',
+                cursor: 'pointer',
+                marginLeft: 4,
+                flexShrink: 0,
+              }}
+            >
+              {t('清除筛选')}
+            </span>
+          )}
+        </div>
+      )}
     </Card>
   );
 };
